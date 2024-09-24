@@ -1,6 +1,6 @@
 include("factory_simulation.jl")
 
-# initialising 
+# initialising params 
 seed = 1 
 T = 1000.0
 

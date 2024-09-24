@@ -5,19 +5,20 @@ using Printf
 using Dates
 
 ### seed and rng set
-seed = 1 
-rng = StableRNG(seed)
+# seed = 1 
+# rng = StableRNG(seed)
 
-### entity data structure for each lawnmower?
+### ENTITY STRUCT
 mutable struct Lawnmower
     id::Int64
     arrival_time::Float64 # time when the lawnmower part arrives?
     start_blade_fitting::Float64 # time when the machine enters the blade fitting machine
     fitting_completion::Float64 # when lawnmower completes blade fitting?
+    ##############might add completion event
 end
 
-## construct for mower
-Lawnmower(id, arrival_time) = Customer(id, arrival_time, -1.0, -1.0) # set blade and completion time to -1 (clearly not set yet)
+## BLANK CONSTR MOWER
+Lawnmower(id, arrival_time) = Lawnmower(id, arrival_time, -1.0, -1.0) # set blade and completion time to -1 (clearly not set yet)
 
 ### EVENTS:
 abstract type Event end
@@ -40,6 +41,14 @@ mutable struct AssemblyCompletion <: Event # when mower is fully finished
     time::Float64
 end
 
+### PARAMETER STRUCTURE
+struct Parameters
+    mean_interarrival::Float64
+    mean_construction_time::Float64
+    mean_interbreakdown_time::Float64
+    mean_repair_time::Float64
+end 
+
 ### state represents the entire system at any point in time 
 mutable struct SystemState
     current_time::Float64
@@ -53,28 +62,71 @@ mutable struct SystemState
     total_repair_time::Float64 # to count total time lost to repairations
 end
 
-function SystemState() # blank constr. do i need to change the name for other stuff
+function State() # blank constr.
+    init_time = 0.0
+    init_event_queue = PriorityQueue{Event}()
+    init_order_queue = Queue{Lawnmower}()
+    init_n_entities = 0
+    init_n_events = 0
+    init_machine_busy = false
+    init_machine_broken = false
+    init_n_interruptions = 0
+    init_repair_time = 0.0
     return SystemState(
-        0.0,
-        PriorityQueue{Event}(),
-        Queue{Entity}(),
-        0,
-        0,
-        false,
-        false,
-        0,
-        0.0
-    )
+        init_time,
+        init_event_queue,
+        init_order_queue,
+        init_n_entities,
+        init_n_events,
+        init_machine_busy,
+        init_machine_broken,
+        init_n_interruptions,
+        init_repair_time)
 end
 
+### STRUCT FOR RandomNGs
+struct RandomNGs
+    rng::StableRNG.LehmerRNG
+    interarrival_time::Function
+    construction_time::Function 
+    interbreakdown_time::Function
+    repair_time::Function
+end 
+
+### CONSTR W PARAMATER
+function RandomNGs( P::Parameters )
+    rng = StableRNG(P.seed)
+    interarrival_time() = rand(rng, Exponential(P.mean_interarrival))
+    construction_time() = P.mean_construction_time
+    interbreakdown_time() = rand(rng, Exponential(P.mean_interbreakdown_time))
+    repair_time() = rand(rng, Exponential(P.mean_repair_time))
+end 
+
+### INITIALISE FN 
+function initialise(P::Parameters) 
+    R = RandomNGs(P)
+    system = State()
+
+    t0 = 0.0
+    system.n_events += 1
+    enqueue!(system.event_queue, Arrival(0,t0),t0)
+
+    t1 = 150.0
+    system.n_events += 1 
+    enqueue!(system.event_queue, Breakdown(system.n_events,t1),t1)
+
+########################## finish the initialising 
+
+
+
 ### HELPER FUNCTIONS:
-mean_interarrival = 60 # unit is minutes
-interarrival_time() = rand(rng, Exponential(mean_interarrival)) # gen ia times
-service_time() = 45 #mins
-mean_breakdown = 2880 #2 days in minute
-breakdown_time() = rand(rng,Exponential(mean_breakdown))
-mean_repair = 180 #mins
-repair_time() = rand(rng, Exponential(mean_repair))
+# mean_interarrival = 60 # unit is minutes
+# interarrival_time() = rand(rng, Exponential(mean_interarrival)) # gen ia times
+# service_time() = 45 #mins
+# mean_breakdown = 2880 #2 days in minute
+# breakdown_time() = rand(rng,Exponential(mean_breakdown))
+# mean_repair = 180 #mins
+# repair_time() = rand(rng, Exponential(mean_repair))
 
 
 ### MOVING LAWNMOWER TO BLADE MACHINE
@@ -129,4 +181,27 @@ end
 function update!(system::SystemState, event::Departure)
     system.current_time = event.time # advance system into the new departure
     # departing_lawnmower = dequeue!(system.???)
+    ############################### finish departure event type
+end
+
+### UPDATE BREAKDOWN
+function update!(system::SystemState, rng::RandomNGs, event::Breakdown)
+    system.current_time = event.time
+    system.machine_broken = true
+    system.n_interruptions += 1
+
+    if system.machine_busy
+        lawnmower = dequeue!(system.order_queue)
+        
+        # Calculate repair time
+        repair_duration = repair_time()
+
+        # Extend fitting completion time and update priority in the event queue directly
+        lawnmower.fitting_completion += repair_duration
+        system.event_queue[lawnmower.completion_event] = lawnmower.fitting_completion
+    end
+
+    # Schedule repair completion
+    repair_completion_time = system.current_time + repair_duration
+    enqueue!(system.event_queue, RepairCompletion(system.n_events + 1, repair_completion_time))
 end
