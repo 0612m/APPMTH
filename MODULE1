@@ -1,0 +1,108 @@
+# assigning variables
+
+a = 1+2
+b = 2*3
+c = a^b
+
+# boolean operations 
+
+1 == 1
+
+1 != 1 
+1 < 2
+1 >= 2
+
+# getting help in julia
+# ? &&
+
+
+# julia conventions
+a = [1]
+push!(a,2)
+
+
+#using packages:
+# loading with "using" just write at the top using Plots. You can then call a fn like plot()
+# loading with "import" just write import Plots. When calling do like Plots.plot() with the prefix. 
+
+
+
+using Random
+
+#constructor for a mersenne twister obj with seed = 1234
+rng = MersenneTwister(1234)  # good to set a seed so your results are reproducible 
+rand(rng,5)
+
+#boolean random nums (1s and 0s)
+bitrand(5) 
+
+
+using StableRNGs
+
+rng = StableRNG(3) # creating srng type with seed 1234
+rand(rng,1:10)
+
+rng = StableRNG(10)
+rand(rng,1)
+
+# create distr
+using Distributions
+
+myNormal = Normal(1,2) # the mean is 1 and stddev is 2
+
+#pass the distr to the rand fn 
+rand(rng,myNormal,5) #parameters: num gen type, distr, then num of samples you want
+
+
+
+# make histograms:
+using StatsPlots
+using Plots
+rng = StableRNG(1234)
+samples = rand(rng,myNormal,1000) #generates 1000 samples from this distr
+histogram(samples, normalize = :pdf, label = "samples") # creates histo from samples, 
+#  normalises the height of the bars to they correspond to a prob dens
+plot!(myNormal, label = "pdf") #...
+
+
+#quizz
+using StableRNGs, Distributions
+
+rng = StableRNG(4) 
+dist = Binomial( 10, 0.2 )
+rand( rng,dist )
+
+
+rng = StableRNG(10)
+dist = Binomial(10,0.2) 
+ans = rand(rng, dist, 1000)
+maximum(ans)
+
+
+dist = Exponential(2)
+rng = StableRNG(3)
+rand(rng, dist, 1)
+
+#to make a function follow this:
+
+function fun1(x, y)
+    output = x^2 + y^2
+    return output
+end
+
+#to call fns:
+fun1(4,2)
+
+rng = StableRNG(12)
+myUnif = Uniform(0,1)
+ans = rand(rng, myUnif, 250)
+
+mydist = Exponential(1)
+rng = StableRNG(10)
+rand(rng, mydist, 12)
+
+rng = Normal(0,1)
+ans = rand(rng,100)
+maximum(ans)
+ans2 = rand(rng,10000000)
+maximum(ans2)
