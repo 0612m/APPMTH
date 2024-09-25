@@ -4,23 +4,7 @@ using StableRNGs
 using Printf
 using Dates
 
-### seed and rng set
-# seed = 1 
-# rng = StableRNG(seed)
-
-### ENTITY STRUCT
-mutable struct Lawnmower
-    id::Int64
-    arrival_time::Float64 # time when the lawnmower part arrives?
-    start_blade_fitting::Float64 # time when the machine enters the blade fitting machine
-    fitting_completion::Float64 # when lawnmower completes blade fitting?
-    ##############might add completion event
-end
-
-## BLANK CONSTR MOWER
-Lawnmower(id, arrival_time) = Lawnmower(id, arrival_time, -1.0, -1.0) # set blade and completion time to -1 (clearly not set yet)
-
-### EVENTS:
+### EVENTS: structs
 abstract type Event end
 
 mutable struct Arrival <: Event ## arrival of mower
@@ -41,15 +25,19 @@ mutable struct AssemblyCompletion <: Event # when mower is fully finished
     time::Float64
 end
 
-### PARAMETER STRUCTURE
-struct Parameters
-    mean_interarrival::Float64
-    mean_construction_time::Float64
-    mean_interbreakdown_time::Float64
-    mean_repair_time::Float64
-end 
+### ENTITY: struct
+mutable struct Lawnmower
+    id::Int64
+    arrival_time::Float64 # time when the lawnmower part arrives?
+    start_blade_fitting::Float64 # time when the machine enters the blade fitting machine
+    fitting_completion::Float64 # when lawnmower completes blade fitting?
+    ##############might add completion event?
+end
 
-### state represents the entire system at any point in time 
+## ENTITY: blank struct
+Lawnmower(id, arrival_time) = Lawnmower(id, arrival_time, -1.0, -1.0) # set blade and completion time to -1 (clearly not set yet)
+
+### STATE: struct
 mutable struct SystemState
     current_time::Float64
     event_queue::PriorityQueue{Event} # keep track of future arrivals/services
@@ -62,7 +50,8 @@ mutable struct SystemState
     total_repair_time::Float64 # to count total time lost to repairations
 end
 
-function State() # blank constr.
+### STATE: blank struct
+function State() 
     init_time = 0.0
     init_event_queue = PriorityQueue{Event}()
     init_order_queue = Queue{Lawnmower}()
@@ -83,39 +72,6 @@ function State() # blank constr.
         init_n_interruptions,
         init_repair_time)
 end
-
-### STRUCT FOR RandomNGs
-struct RandomNGs
-    rng::StableRNG.LehmerRNG
-    interarrival_time::Function
-    construction_time::Function 
-    interbreakdown_time::Function
-    repair_time::Function
-end 
-
-### CONSTR W PARAMATER
-function RandomNGs( P::Parameters )
-    rng = StableRNG(P.seed)
-    interarrival_time() = rand(rng, Exponential(P.mean_interarrival))
-    construction_time() = P.mean_construction_time
-    interbreakdown_time() = rand(rng, Exponential(P.mean_interbreakdown_time))
-    repair_time() = rand(rng, Exponential(P.mean_repair_time))
-end 
-
-### INITIALISE FN 
-function initialise(P::Parameters) 
-    R = RandomNGs(P)
-    system = State()
-
-    t0 = 0.0
-    system.n_events += 1
-    enqueue!(system.event_queue, Arrival(0,t0),t0)
-
-    t1 = 150.0
-    system.n_events += 1 
-    enqueue!(system.event_queue, Breakdown(system.n_events,t1),t1)
-
-########################## finish the initialising 
 
 
 
@@ -180,7 +136,10 @@ end
 ### UPDATE DEPARTURE of a lawnmower? 
 function update!(system::SystemState, event::Departure)
     system.current_time = event.time # advance system into the new departure
-    # departing_lawnmower = dequeue!(system.???)
+    
+    #mark as assembly complete, machine is not busy
+
+
     ############################### finish departure event type
 end
 
@@ -205,3 +164,44 @@ function update!(system::SystemState, rng::RandomNGs, event::Breakdown)
     repair_completion_time = system.current_time + repair_duration
     enqueue!(system.event_queue, RepairCompletion(system.n_events + 1, repair_completion_time))
 end
+
+### PARAMETER: struct
+struct Parameters
+    mean_interarrival::Float64
+    mean_construction_time::Float64
+    mean_interbreakdown_time::Float64
+    mean_repair_time::Float64
+end 
+
+### RANDOMNGS: struct
+struct RandomNGs
+    rng::StableRNG.LehmerRNG
+    interarrival_time::Function
+    construction_time::Function 
+    interbreakdown_time::Function
+    repair_time::Function
+end 
+
+### RANDOMNGS: function
+function RandomNGs( P::Parameters )
+    rng = StableRNG(P.seed)
+    interarrival_time() = rand(rng, Exponential(P.mean_interarrival))
+    construction_time() = P.mean_construction_time
+    interbreakdown_time() = rand(rng, Exponential(P.mean_interbreakdown_time))
+    repair_time() = rand(rng, Exponential(P.mean_repair_time))
+end 
+
+### INITIALISE FN 
+function initialise(P::Parameters) 
+    R = RandomNGs(P)
+    system = State()
+
+    t0 = 0.0
+    system.n_events += 1
+    enqueue!(system.event_queue, Arrival(0,t0),t0)
+
+    t1 = 150.0
+    system.n_events += 1 
+    enqueue!(system.event_queue, Breakdown(system.n_events,t1),t1)
+
+########################## finish the initialising 
