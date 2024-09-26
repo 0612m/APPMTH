@@ -86,16 +86,18 @@ end
 
 
 ### MOVING LAWNMOWER TO BLADE MACHINE
-function move_lawnmower_to_machine( system::SystemState )
-    lawnmower = dequeue!(system.order_queue) #remove mower from waiting
+function move_lawnmower_to_machine( system::SystemState, R::RandomNGs )
+    lawnmower = dequeue!(system.order_queue) #remove mower from waiting list
+    system.machine_busy = true # change machine to busy
     lawnmower.start_blade_fitting = system.current_time #start fitting
-    lawnmower.fitting_completion = lawnmower.start_blade_fitting + service_time()
-    system.machine_busy = true
+    lawnmower.fitting_completion = lawnmower.start_blade_fitting + R.construction_time() # total service time
+    
     
     #assemblyCompletion event for when the blade fitting is done
-    system.n_events += 1
-    assembly_completion = AssemblyCompletion(system.n_events, lawnmower.fitting_completion)
-    enqueue!(system.event_queue, assembly_completion, lawnmower.fitting_completion)
+    system.n_events += 1 # number of event increases 
+    assembly_completion = AssemblyCompletion(system.n_events, lawnmower.fitting_completion) # create completion event
+    enqueue!(system.event_queue, assembly_completion, lawnmower.fitting_completion) #shld i include this?
+    
     
     # check if the machine will break down before the fitting is completed
     if rand(rng, Exponential(mean_breakdown)) < service_time()
@@ -106,39 +108,34 @@ function move_lawnmower_to_machine( system::SystemState )
 end
 
 
-### UPDATE ARRIVAL of a lawnmower in system 
-function update!(system::SystemState, event::Arrival)
+### UPDATE ARRIVAL 
+function update!(system::SystemState, R::RandomNGs, event::Arrival)
     system.current_time = event.time # advancing system to the new arrival 
-    system.n_entities += 1 # new ent enters system
+    system.n_entities += 1 # new entity enters system
 
-    # create an arriving mower and add to blade queue
+    # create mower object and adding to blade queue
     new_lawnmower = Lawnmower(system.n_entities, event.time)
     enqueue!(system.order_queue, new_lawnmower)
 
-    #generating next arrival and adding it to the event queue (priority)
-    system.n_events += 1
-    future_arrival = Arrival(system.n_events, system.time + interarrival_time())
-    enqueue!(system.event_queue, future_arrival, future_arrival.time)
+    # generating next arrival and adding it to the event queue (priority)
+    system.n_events += 1 # number of events increases 
+    future_arrival = Arrival(system.n_events, system.time + R.interarrival_time()) # arrival event with id and time.
+    enqueue!(system.event_queue, future_arrival, future_arrival.time) # add to event queue, using future arrivals time.
 
-    #checking if the blade thing is full 
-    # im thinking check if broken then if available check, then in that 
-    # call the function to move the lawnmower "in" to blade machine 
-    #or should i change it so that these things arent in system state but diff?
-    #own state or mini fn?
+    # if machine is working and available
     if !system.machine_broken && !system.machine_busy
-        move_lawnmower_to_machine!(SystemState)
+        move_lawnmower_to_machine!(SystemState) # move into service
     end 
 
     return new_lawnmower
 end
 
 
-### UPDATE DEPARTURE of a lawnmower? 
+### UPDATE DEPARTURE
 function update!(system::SystemState, event::Departure)
     system.current_time = event.time # advance system into the new departure
     
     #mark as assembly complete, machine is not busy
-
 
     ############################### finish departure event type
 end
@@ -203,5 +200,10 @@ function initialise(P::Parameters)
     t1 = 150.0
     system.n_events += 1 
     enqueue!(system.event_queue, Breakdown(system.n_events,t1),t1)
+    
+    return (system,R)
+end 
 
 ########################## finish the initialising 
+
+### RUN FUNCTION
