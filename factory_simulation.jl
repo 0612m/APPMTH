@@ -13,6 +13,7 @@ mutable struct Arrival <: Event ## arrival of mower
 end
 
 mutable struct Breakdown <: Event # breakdown of machine
+    id::Int64
     time::Float64
 end
 
@@ -89,7 +90,7 @@ end
 function move_lawnmower_to_machine(system::SystemState, R::RandomNGs)
     lawnmower = dequeue!(system.order_queue) # remove mower from waiting list
     system.current_lawnmower = lawnmower  # store the mower being processed in the system
-    system.machine_broken = false # change machine to busy
+    system.machine_broken = false # change machine to not broken
 
     lawnmower.start_blade_fitting = system.current_time # start blade fitting
     lawnmower.fitting_completion = lawnmower.start_blade_fitting + R.construction_time() # generate total service time
@@ -98,14 +99,6 @@ function move_lawnmower_to_machine(system::SystemState, R::RandomNGs)
     system.n_events += 1 # number of event increases 
     assembly_completion = AssemblyCompletion(system.n_events, lawnmower.fitting_completion) # create completion event
     enqueue!(system.event_queue, assembly_completion, lawnmower.fitting_completion) # enqueue the event 
-
-
-    # # check if the machine will break down before the fitting is completed
-    # if rand(rng, Exponential(mean_breakdown)) < service_time()
-    #     # schedule a breakdown time:
-    #     breakdown_time = system.current_time + breakdown_time()
-    #     enqueue!(system.event_queue, Breakdown(breakdown_time), breakdown_time)
-    # end
 end
 
 
@@ -126,7 +119,7 @@ function update!(system::SystemState, R::RandomNGs, event::Arrival)
 
     # if machine is working and available
     if !system.machine_broken && system.current_lawnmower === nothing
-        move_lawnmower_to_machine!(SystemState, R) # move into service
+        move_lawnmower_to_machine(system, R) # move into service
     end
 
     return new_lawnmower
@@ -134,12 +127,23 @@ end
 
 
 ### UPDATE DEPARTURE
-function update!(system::SystemState, event::Departure)
+function update!(system::SystemState, R::RandomNGs, event::AssemblyCompletion)
     system.current_time = event.time # advance system into the new departure
+    lawnmower = system.current_lawnmower # select lawnmower as current one being made 
+    lawnmower.fitting_completion = system.current_time # set lawnmower's completion to occur at the current time ()
 
-    #mark as assembly complete, machine is not busy
+    system.n_events += 1 # increase event count
 
-    ############################### finish departure event type
+    system.current_lawnmower = nothing # reset system into having no mower in machine
+
+    # initiate the next event if there are more orders to be processed 
+    if !isempty(system.order_queue)
+        move_lawnmower_to_machine(system, R) # call move mower to machine function
+    else
+        system.machine_broken = false # keep machine status as false
+    end 
+
+    return lawnmower
 end
 
 ### UPDATE BREAKDOWN
@@ -166,7 +170,7 @@ function update!(system::SystemState, R::RandomNGs, event::Breakdown)
 end
 
 ### UDPDATE REPAIR 
-function update!(system::SystemState, R::RandomNGs, event::Repair)
+function update!(system::SystemState, R::RandomNGs, event::RepairCompletion)
     system.current_time = event.time # advance system time to this event
     system.machine_broken = false # changing machine status to opertaional
 
@@ -216,16 +220,33 @@ function initialise(P::Parameters)
     system = State()
 
     t0 = 0.0
-    system.n_events += 1
-    enqueue!(system.event_queue, Arrival(0, t0), t0)
+    system.n_events += 1  # 
+    enqueue!(system.event_queue, Arrival(system.n_events, t0), t0)  #
 
     t1 = 150.0
-    system.n_events += 1
-    enqueue!(system.event_queue, Breakdown(system.n_events, t1), t1)
+    system.n_events += 1  # 
+    enqueue!(system.event_queue, Breakdown(system.n_events, t1), t1) #
 
     return (system, R)
 end
 
-########################## finish the initialising 
-
 ### RUN FUNCTION
+# The function should run the main simulation loop for time T. It should remove
+# an event from the event list, call the appropriate function(s) to update the state
+# and write any required output. This should be the function that writes any
+# output when the code is performing correctly, but you may create some utility
+# functions for writing data that are called by run! to make the run! function more
+# readable.
+# The run! function should return the system state when the simulation finishes
+
+function run!(system::SystemState, R::RandomNGs, T::Float64, fid_state::IO, fid_entities::IO)
+    # main simulation loop
+    while system.current_time < T # run loop until time is reached 
+        (event, event_time) = dequeue_pair!(system.event_queue) # grab the next event from event queue
+        system.current_time = event_time # advance system time to new arrival
+        # system.n_events += 1 # increase event counter?
+
+        # 
+    end
+    
+end
