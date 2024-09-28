@@ -143,11 +143,18 @@ function update!(system::SystemState, R::RandomNGs, event::Breakdown)
         lawnmower = system.current_lawnmower # select the mower being processed
 
         repair_duration = R.repair_time() # generate a repair time using RandomNGs
-
-        ### LOOP HERE FOR REMOVING FROM ASSEMBLY QUEUE and then adding it back of sumn 
-
         lawnmower.fitting_completion += repair_duration # adding repair time to completion time
-        system.event_queue[lawnmower.completion_event] = lawnmower.fitting_completion # updating priority in queue
+        
+        #search for the assembly complete event that was created in event queue
+        for (event, _) in system.event_queue
+            if event isa AssemblyCompletion && event.id == lawnmower.id # if the id matches 
+                dequeue!(system.event_queue, event)  # remove the event
+                break
+            end
+        end
+
+        #reenqueue an assembly complete event 
+        enqueue!(system.event_queue, AssemblyCompletion(lawnmower.id, lawnmower.fitting_completion), lawnmower.fitting_completion)
     end
 
     # schedule repair completion event
@@ -254,12 +261,8 @@ function write_entity(entity_file::IO, system::SystemState, lawnmower::LawnMower
             lawnmower.fitting_completion,
             system.n_interruptions)
 
-    @printf(entity_file,"\n") #maybe?
+    @printf(entity_file,"\n") 
 end
-
-
-
-
 
 ### RUN FUNCTION
 # The function should run the main simulation loop for time T. It should remove
@@ -278,8 +281,32 @@ function run!(system::SystemState, R::RandomNGs, T::Float64, fid_state::IO, fid_
         # system.n_events += 1 # increase event counter?
 
         # write out event and state data before event 
-        write_state()...
-    end
-    
-end
+        write_state(fid_state, system, event)
+        
+                # process the event based on event type
+                if event isa Arrival
+                    update!(state, R, event)
+                elseif event isa Departure
+                    update!(state, R, event)
+                    # assume you are logging the lawnmower that has just completed processing
+                    lawnmower = state.current_lawnmower  # Get the current lawnmower being processed
+                    write_entity(fid_entities, state, lawnmower, event)  # Write lawnmower data to entity file
+                elseif event isa Breakdown
+                    update!(state, R, event)
+                elseif event isa Repair
+                    update!(state, R, event)
+                else
+                    error("Unknown event type")
+                end
+        
+                # Write the updated state to the state file after processing the event
+                write_state(fid_state, state, event)
+                
+                if departure !== nothing 
+                    write_entity(fid_entities, system, lawnmower, departure)
+                end
+            end
+            
+            return system  # Return the final state of the system
+        end
 
