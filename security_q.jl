@@ -30,9 +30,9 @@ mutable struct Finish <: Event # a customer finishes processing at server i
     server::Int64     # ID of the server that is finishing
 end
 
-## struct Null <: Event 
-    ##id::Int64    
-##end
+# struct Null <: Event 
+#     id::Int64    
+# end
 
 ### parameter structure
 struct Parameters
@@ -96,7 +96,7 @@ end
 # constructor function to create all the pieces required
 function RandomNGs( P::Parameters )
     rng = StableRNG( P.seed ) # create a new RNG with seed set to that required
-    interarrival_time() = rand( rng, Exponential( P.mean_interarrival ) )  
+    interarrival_time = rand( rng, Exponential( P.mean_interarrival ) )  
     server_time = () -> rand( rng, Exponential( P.mean_server_time ) )
     return RandomNGs( rng, interarrival_time,  server_time )
 end

@@ -32,7 +32,6 @@ mutable struct Lawnmower
     arrival_time::Float64 # time when the lawnmower part arrives?
     start_blade_fitting::Float64 # time when the machine enters the blade fitting machine
     fitting_completion::Float64 # when lawnmower completes blade fitting?
-    ##############might add completion event?
 end
 
 ## ENTITY: blank struct
@@ -144,7 +143,9 @@ function update!(system::SystemState, R::RandomNGs, event::Breakdown)
         lawnmower = system.current_lawnmower # select the mower being processed
 
         repair_duration = R.repair_time() # generate a repair time using RandomNGs
-        ### LOOP HERE FOR REMOVING FROM ASSEMBLY QUEUE?
+
+        ### LOOP HERE FOR REMOVING FROM ASSEMBLY QUEUE and then adding it back of sumn 
+
         lawnmower.fitting_completion += repair_duration # adding repair time to completion time
         system.event_queue[lawnmower.completion_event] = lawnmower.fitting_completion # updating priority in queue
     end
@@ -201,6 +202,8 @@ function RandomNGs(P::Parameters)
     construction_time() = P.mean_construction_time
     interbreakdown_time() = rand(rng, Exponential(P.mean_interbreakdown_time))
     repair_time() = rand(rng, Exponential(P.mean_repair_time))
+    return RandomNGs( rng, interarrival_time, construction_time, interbreakdown_time, repair_time )
+
 end
 
 ### INITIALISE FN 
@@ -221,7 +224,7 @@ end
 
 ### HELPER FNS TO WRITE DATA
 
-# STATE writing fn
+# STATE writing fn (actually record state data)
 function write_state(event_file::IO, system::SystemState, event::Event)
     type_of_event = typeof(event) # creating variable for event type
     in_service = (system.current_lawnmower !== nothing) ? 1 : 0 # variable for in service status (if in service, set as 1)
@@ -241,7 +244,7 @@ function write_state(event_file::IO, system::SystemState, event::Event)
     @printf(event_file, "\n")
 end 
 
-# ENTITIES writing fn
+# ENTITIES writing fn (actually records entity data)
 function write_entity(entity_file::IO, system::SystemState, lawnmower::LawnMower, event::Event)
     @printf(entity_file, 
             "%6d, %12.14f, %12.14f, %12.14f, %4d∇",
@@ -275,7 +278,7 @@ function run!(system::SystemState, R::RandomNGs, T::Float64, fid_state::IO, fid_
         # system.n_events += 1 # increase event counter?
 
         # write out event and state data before event 
-        write_state()
+        write_state()...
     end
     
 end
