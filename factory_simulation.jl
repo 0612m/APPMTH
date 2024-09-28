@@ -74,18 +74,6 @@ function State()
         init_current_lawnmower)
 end
 
-
-
-### HELPER FUNCTIONS:
-# mean_interarrival = 60 # unit is minutes
-# interarrival_time() = rand(rng, Exponential(mean_interarrival)) # gen ia times
-# service_time() = 45 #mins
-# mean_breakdown = 2880 #2 days in minute
-# breakdown_time() = rand(rng,Exponential(mean_breakdown))
-# mean_repair = 180 #mins
-# repair_time() = rand(rng, Exponential(mean_repair))
-
-
 ### MOVING LAWNMOWER TO BLADE MACHINE
 function move_lawnmower_to_machine(system::SystemState, R::RandomNGs)
     lawnmower = dequeue!(system.order_queue) # remove mower from waiting list
@@ -190,6 +178,7 @@ end
 
 ### PARAMETER: struct
 struct Parameters
+    seed::Int
     mean_interarrival::Float64
     mean_construction_time::Float64
     mean_interbreakdown_time::Float64
@@ -230,6 +219,45 @@ function initialise(P::Parameters)
     return (system, R)
 end
 
+### HELPER FNS TO WRITE DATA
+
+# STATE writing fn
+function write_state(event_file::IO, system::SystemState, event::Event)
+    type_of_event = typeof(event) # creating variable for event type
+    in_service = (system.current_lawnmower !== nothing) ? 1 : 0 # variable for in service status (if in service, set as 1)
+    machine_status = !system.machine_broken ? 0 : 1 # if machine is not broken, display 0 or else 1 (not broken)
+    
+    @printf(event_file, # print function with parameters of the file,
+            "%12.3f, %6d, %11s, %4d, %4d, %4d, %4d", # space and characters allowed settings
+            system.current_time, # time of event columm
+            event.id, # event id column
+            type_of_event, # event type column
+            length(system.event_queue), # length of events occuring
+            length(system.order_queue), # length of order list (waiting for machine)
+            in_service, # in machine has a mower in process column
+            machine_status # if machine is broken or not column 
+            )
+
+    @printf(event_file, "\n")
+end 
+
+# ENTITIES writing fn
+function write_entity(entity_file::IO, system::SystemState, lawnmower::LawnMower, event::Event)
+    @printf(entity_file, 
+            "%6d, %12.14f, %12.14f, %12.14f, %4d∇",
+            event.id,
+            lawnmower.arrival_time,
+            lawnmower.start_blade_fitting,
+            lawnmower.fitting_completion,
+            system.n_interruptions)
+
+    @printf(entity_file,"\n") #maybe?
+end
+
+
+
+
+
 ### RUN FUNCTION
 # The function should run the main simulation loop for time T. It should remove
 # an event from the event list, call the appropriate function(s) to update the state
@@ -246,7 +274,9 @@ function run!(system::SystemState, R::RandomNGs, T::Float64, fid_state::IO, fid_
         system.current_time = event_time # advance system time to new arrival
         # system.n_events += 1 # increase event counter?
 
-        # 
+        # write out event and state data before event 
+        write_state()
     end
     
 end
+
