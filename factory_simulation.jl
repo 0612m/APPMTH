@@ -18,10 +18,11 @@ mutable struct Breakdown <: Event # breakdown of machine
 end
 
 mutable struct RepairCompletion <: Event # repair completion event
+    id::Int64
     time::Float64
 end
 
-mutable struct AssemblyCompletion <: Event # when mower is fully finished
+mutable struct Departure <: Event # when mower is fully finished
     id::Int64
     time::Float64
 end
@@ -40,20 +41,20 @@ Lawnmower(id, arrival_time) = Lawnmower(id, arrival_time, -1.0, -1.0) # set blad
 ### STATE: struct
 mutable struct SystemState
     current_time::Float64
-    event_queue::PriorityQueue{Event} # keep track of future arrivals/services??
+    event_queue::PriorityQueue{Event,Float64} # keep track of future arrivals/services??
     order_queue::Queue{Lawnmower} # keep track of waiting orders
     n_entities::Int64 # number of mowers in da system
     n_events::Int64 # tracking num of events 
     machine_broken::Bool # if machine is broken/under repair
     n_interruptions::Int64 # counter for interruptions of mowers because of breakdowns
     total_repair_time::Float64 # to count total time lost to repairations
-    current_lawnmower::Union{Nothing,LawnMower}  # tracks the mower in service
+    current_lawnmower::Union{Nothing,Lawnmower}  # tracks the mower in service
 end
 
 ### STATE: blank struct
 function State()
     init_time = 0.0
-    init_event_queue = PriorityQueue{Event}()
+    init_event_queue = PriorityQueue{Event,Float64}()
     init_order_queue = Queue{Lawnmower}()
     init_n_entities = 0
     init_n_events = 0
@@ -72,6 +73,34 @@ function State()
         init_repair_time,
         init_current_lawnmower)
 end
+### PARAMETER: struct
+struct Parameters
+    seed::Int
+    mean_interarrival::Float64
+    mean_construction_time::Float64
+    mean_interbreakdown_time::Float64
+    mean_repair_time::Float64
+end
+
+### RANDOMNGS: struct
+struct RandomNGs
+    rng::StableRNGs.LehmerRNG
+    interarrival_time::Function
+    construction_time::Function
+    interbreakdown_time::Function
+    repair_time::Function
+end
+
+### RANDOMNGS: function
+function RandomNGs(P::Parameters)
+    rng = StableRNG(P.seed)
+    interarrival_time() = rand(rng, Exponential(P.mean_interarrival))
+    construction_time() = P.mean_construction_time
+    interbreakdown_time() = rand(rng, Exponential(P.mean_interbreakdown_time))
+    repair_time() = rand(rng, Exponential(P.mean_repair_time))
+    return RandomNGs(rng, interarrival_time, construction_time, interbreakdown_time, repair_time)
+
+end
 
 ### MOVING LAWNMOWER TO BLADE MACHINE
 function move_lawnmower_to_machine(system::SystemState, R::RandomNGs)
@@ -82,9 +111,9 @@ function move_lawnmower_to_machine(system::SystemState, R::RandomNGs)
     lawnmower.start_blade_fitting = system.current_time # start blade fitting
     lawnmower.fitting_completion = lawnmower.start_blade_fitting + R.construction_time() # generate total service time
 
-    #assemblyCompletion event for when the blade fitting is done
+    #Departure event for when the blade fitting is done
     system.n_events += 1 # number of event increases 
-    assembly_completion = AssemblyCompletion(system.n_events, lawnmower.fitting_completion) # create completion event
+    assembly_completion = Departure(system.n_events, lawnmower.fitting_completion) # create completion event
     enqueue!(system.event_queue, assembly_completion, lawnmower.fitting_completion) # enqueue the event 
 end
 
@@ -100,7 +129,7 @@ function update!(system::SystemState, R::RandomNGs, event::Arrival)
 
     # generating next arrival and adding it to the event queue (priority)
     system.n_events += 1 # number of events increases 
-    future_arrival_time = system.time + R.interarrival_time() # generate arrival time 
+    future_arrival_time = system.current_time + R.interarrival_time() # generate arrival time 
     future_arrival = Arrival(system.n_events, future_arrival_time) # arrival event with id and time.
     enqueue!(system.event_queue, future_arrival, future_arrival_time) # add to event queue, using future arrivals time.
 
@@ -113,54 +142,56 @@ function update!(system::SystemState, R::RandomNGs, event::Arrival)
 end
 
 
-### UPDATE DEPARTURE
-function update!(system::SystemState, R::RandomNGs, event::AssemblyCompletion)
+### UPDATE ASSEMBLY COMPLETION / DEPARTURE
+function update!(system::SystemState, R::RandomNGs, event::Departure)
+    if system.machine_broken
+        return
+    end
+
     system.current_time = event.time # advance system into the new departure
-    lawnmower = system.current_lawnmower # select lawnmower as current one being made 
-    lawnmower.fitting_completion = system.current_time # set lawnmower's completion to occur at the current time ()
 
-    system.n_events += 1 # increase event count
+    if system.current_lawnmower !== nothing
+        lawnmower = system.current_lawnmower # select lawnmower as current one being made 
+        lawnmower.fitting_completion = system.current_time # set lawnmower's completion to occur at the current time ()
+        write_entity(fid_entities, system, lawnmower, event)
 
-    system.current_lawnmower = nothing # reset system into having no mower in machine
+        system.n_events += 1 # increase event count
+        system.current_lawnmower = nothing # reset system into having no mower in machine
 
-    # initiate the next event if there are more orders to be processed 
-    if !isempty(system.order_queue)
-        move_lawnmower_to_machine(system, R) # call move mower to machine function
-    else
-        system.machine_broken = false # keep machine status as false
-    end 
-
-    return lawnmower
+        # initiate the next event if there are more orders to be processed 
+        if !isempty(system.order_queue)
+            move_lawnmower_to_machine(system, R) # call move mower to machine function
+        end
+        # return lawnmower #?
+    end
 end
 
 ### UPDATE BREAKDOWN
 function update!(system::SystemState, R::RandomNGs, event::Breakdown)
     system.current_time = event.time # advance system time to this event
     system.machine_broken = true # change machine to broken 
-    system.n_interruptions += 1 # increment interruption counter by 1 
-
     if system.current_lawnmower !== nothing # if machine was working on a mower at time of breakdown,
         lawnmower = system.current_lawnmower # select the mower being processed
+        system.n_interruptions += 1 # increment interruption counter by 1 
 
         repair_duration = R.repair_time() # generate a repair time using RandomNGs
         lawnmower.fitting_completion += repair_duration # adding repair time to completion time
-        
+
         #search for the assembly complete event that was created in event queue
         for (event, _) in system.event_queue
-            if event isa AssemblyCompletion && event.id == lawnmower.id # if the id matches 
+            if event isa Departure && event.id == lawnmower.id # if the id matches 
                 dequeue!(system.event_queue, event)  # remove the event
                 break
             end
         end
 
-        #reenqueue an assembly complete event 
-        enqueue!(system.event_queue, AssemblyCompletion(lawnmower.id, lawnmower.fitting_completion), lawnmower.fitting_completion)
+
     end
 
     # schedule repair completion event
     system.n_events += 1 # increase event count by 1 
     repair_completion_time = system.current_time + R.repair_time() # set system time when repair finishes
-    repair_event = Repair(system.n_events, repair_completion_time) # create repair event 
+    repair_event = RepairCompletion(system.n_events, repair_completion_time) # create repair event 
     enqueue!(system.event_queue, repair_event, repair_completion_time) # add to event queue, using repair completion time
 
 end
@@ -168,13 +199,15 @@ end
 ### UDPDATE REPAIR 
 function update!(system::SystemState, R::RandomNGs, event::RepairCompletion)
     system.current_time = event.time # advance system time to this event
-    system.machine_broken = false # changing machine status to opertaional
+    system.machine_broken = false # changing machine status to operational
 
     if system.current_lawnmower !== nothing # if there was a current lawnmower
         lawnmower = system.current_lawnmower # select the mower that was being processed 
         system.n_events += 1 # increment event count by 1 
         finish_event_time = lawnmower.fitting_completion # set finish time to this mowers finish time
-        finish_event = Finish(system.n_events, finish_event_time) # create a finish event
+
+
+        finish_event = Departure(system.n_events, finish_event_time) # create a finish event
         enqueue!(system.event_queue, finish_event, finish_event_time) # enqueue the event
     end
 
@@ -183,35 +216,6 @@ function update!(system::SystemState, R::RandomNGs, event::RepairCompletion)
     end
 end
 
-
-### PARAMETER: struct
-struct Parameters
-    seed::Int
-    mean_interarrival::Float64
-    mean_construction_time::Float64
-    mean_interbreakdown_time::Float64
-    mean_repair_time::Float64
-end
-
-### RANDOMNGS: struct
-struct RandomNGs
-    rng::StableRNG.LehmerRNG
-    interarrival_time::Function
-    construction_time::Function
-    interbreakdown_time::Function
-    repair_time::Function
-end
-
-### RANDOMNGS: function
-function RandomNGs(P::Parameters)
-    rng = StableRNG(P.seed)
-    interarrival_time() = rand(rng, Exponential(P.mean_interarrival))
-    construction_time() = P.mean_construction_time
-    interbreakdown_time() = rand(rng, Exponential(P.mean_interbreakdown_time))
-    repair_time() = rand(rng, Exponential(P.mean_repair_time))
-    return RandomNGs( rng, interarrival_time, construction_time, interbreakdown_time, repair_time )
-
-end
 
 ### INITIALISE FN 
 function initialise(P::Parameters)
@@ -235,33 +239,52 @@ end
 function write_state(event_file::IO, system::SystemState, event::Event)
     type_of_event = typeof(event) # creating variable for event type
     in_service = (system.current_lawnmower !== nothing) ? 1 : 0 # variable for in service status (if in service, set as 1)
-    machine_status = !system.machine_broken ? 0 : 1 # if machine is not broken, display 0 or else 1 (not broken)
-    
+    machine_status = system.machine_broken ? 1 : 0 # if machine is not broken, display 0 or else 1 (not broken)
+
     @printf(event_file, # print function with parameters of the file,
-            "%12.3f, %6d, %11s, %4d, %4d, %4d, %4d", # space and characters allowed settings
-            system.current_time, # time of event columm
-            event.id, # event id column
-            type_of_event, # event type column
-            length(system.event_queue), # length of events occuring
-            length(system.order_queue), # length of order list (waiting for machine)
-            in_service, # in machine has a mower in process column
-            machine_status # if machine is broken or not column 
-            )
+        "%.3f, %d, %s, %d, %d, %d, %d", # space and characters allowed settings
+        system.current_time, # time of event columm
+        event.id, # event id column
+        type_of_event, # event type column
+        length(system.event_queue), # length of events occuring
+        length(system.order_queue), # length of order list (waiting for machine)
+        in_service, # in machine has a mower in process column
+        machine_status # if machine is broken or not column 
+    )
 
     @printf(event_file, "\n")
-end 
+end
 
 # ENTITIES writing fn (actually records entity data)
-function write_entity(entity_file::IO, system::SystemState, lawnmower::LawnMower, event::Event)
-    @printf(entity_file, 
-            "%6d, %12.14f, %12.14f, %12.14f, %4d∇",
-            event.id,
-            lawnmower.arrival_time,
-            lawnmower.start_blade_fitting,
-            lawnmower.fitting_completion,
-            system.n_interruptions)
+function write_entity(entity_file::IO, system::SystemState, lawnmower::Lawnmower, event::Event)
+    @printf(entity_file,
+        "%6d, %12.14f, %12.14f, %12.14f, %4d",
+        lawnmower.id,
+        lawnmower.arrival_time,
+        lawnmower.start_blade_fitting,
+        lawnmower.fitting_completion,
+        system.n_interruptions)
 
-    @printf(entity_file,"\n") 
+    @printf(entity_file, "\n")
+end
+
+# PARAMETER writing fn
+function write_parameters(output::IO, P::Parameters) # function to writeout parameters
+    T = typeof(P)
+    for name in fieldnames(T)
+        println(output, "# parameter: $name = $(getfield(P,name))")
+    end
+end
+
+# different signature
+write_parameters(P::Parameters) = write_parameters(stdout, P)
+
+# METADATA writing fn
+function write_metadata(output::IO) # function to writeout extra metadata
+    (path, prog) = splitdir(@__FILE__)
+    println(output, "# file created by code in $(prog)")
+    t = now()
+    println(output, "# file created on $(Dates.format(t, "yyyy-mm-dd at HH:MM:SS"))")
 end
 
 ### RUN FUNCTION
@@ -275,34 +298,29 @@ end
 
 function run!(system::SystemState, R::RandomNGs, T::Float64, fid_state::IO, fid_entities::IO)
     # main simulation loop
-    while system.current_time < T # run loop until time is reached 
+    while system.current_time < T && !isempty(system.event_queue) # run loop until time is reached 
         (event, event_time) = dequeue_pair!(system.event_queue) # grab the next event from event queue
         system.current_time = event_time # advance system time to new arrival
         # system.n_events += 1 # increase event counter?
 
         # write out event and state data before event 
         write_state(fid_state, system, event)
-        
-                # process the event based on event type
-                if event isa Arrival
-                    update!(state, R, event)
-                elseif event isa Departure
-                    update!(state, R, event)
-                    # assume you are logging the lawnmower that has just completed processing
-                    lawnmower = state.current_lawnmower  # Get the current lawnmower being processed
-                    write_entity(fid_entities, state, lawnmower, event)  # Write lawnmower data to entity file
-                elseif event isa Breakdown
-                    update!(state, R, event)
-                elseif event isa Repair
-                    update!(state, R, event)
-                else
-                    error("Unknown event type")
-                end
-        
-                # Write the updated state to the state file after processing the event
-                write_state(fid_state, state, event)
+        # process the event based on event type
+        if event isa Arrival
+            update!(system, R, event)
+        elseif event isa Departure
+            if !system.machine_broken
+                update!(system, R, event)
             end
-            
-            return system  # Return the final state of the system
+        elseif event isa Breakdown
+            update!(system, R, event)
+        elseif event isa RepairCompletion
+            update!(system, R, event)
+        else
+            error("Unknown event type")
         end
+    end
+
+    return system  # Return the final state of the system
+end
 

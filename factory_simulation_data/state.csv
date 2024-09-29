@@ -1,0 +1,42 @@
+# file created by code in factory_simulation.jl
+# file created on 2024-09-29 at 15:07:42
+# parameter: seed = 1
+# parameter: mean_interarrival = 60.0
+# parameter: mean_construction_time = 45.0
+# parameter: mean_interbreakdown_time = 2880.0
+# parameter: mean_repair_time = 180.0
+time, event_id, event_type, length_event_list, length_queue, in_service, machine_status
+0.000, 1, Arrival, 1, 0, 0, 0
+40.499, 3, Arrival, 2, 0, 1, 0
+45.000, 4, Departure, 2, 1, 1, 0
+51.694, 5, Arrival, 2, 0, 1, 0
+90.000, 7, Departure, 2, 1, 1, 0
+117.235, 8, Arrival, 2, 0, 1, 0
+135.000, 10, Departure, 2, 1, 1, 0
+150.000, 2, Breakdown, 2, 0, 1, 0
+180.000, 13, Departure, 2, 0, 1, 1
+182.987, 11, Arrival, 1, 0, 1, 1
+228.329, 14, RepairCompletion, 1, 1, 1, 1
+352.230, 15, Arrival, 1, 1, 1, 0
+422.906, 17, Arrival, 1, 2, 1, 0
+424.419, 18, Arrival, 1, 3, 1, 0
+445.739, 19, Arrival, 1, 4, 1, 0
+468.458, 20, Arrival, 1, 5, 1, 0
+489.240, 21, Arrival, 1, 6, 1, 0
+617.558, 22, Arrival, 1, 7, 1, 0
+639.371, 23, Arrival, 1, 8, 1, 0
+640.300, 24, Arrival, 1, 9, 1, 0
+696.535, 25, Arrival, 1, 10, 1, 0
+738.072, 26, Arrival, 1, 11, 1, 0
+760.587, 16, Departure, 1, 12, 1, 0
+795.219, 27, Arrival, 1, 11, 1, 0
+805.587, 29, Departure, 1, 12, 1, 0
+815.228, 30, Arrival, 1, 11, 1, 0
+844.245, 33, Arrival, 1, 12, 1, 0
+850.587, 32, Departure, 1, 13, 1, 0
+882.001, 34, Arrival, 1, 12, 1, 0
+895.587, 36, Departure, 1, 13, 1, 0
+940.587, 39, Departure, 1, 12, 1, 0
+964.322, 37, Arrival, 1, 11, 1, 0
+985.587, 41, Departure, 1, 12, 1, 0
+1014.804, 42, Arrival, 1, 11, 1, 0

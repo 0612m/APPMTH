@@ -10,7 +10,7 @@ mean_repair = 180 #mins
 time_units = "minutes"
 
 #set parameter using struct 
-P = Parameters( seed, mean_interarrival, construction_time, mean_breakdown, mean_repair) 
+P = Parameters( seed, mean_interarrival, mean_construction_time, mean_breakdown, mean_repair) 
 
 # file directory and name to save to
 dir = pwd()*"/factory_simulation_data" # directory name
