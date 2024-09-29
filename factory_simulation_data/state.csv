@@ -1,5 +1,5 @@
 # file created by code in factory_simulation.jl
-# file created on 2024-09-29 at 15:07:42
+# file created on 2024-09-29 at 21:43:00
 # parameter: seed = 1
 # parameter: mean_interarrival = 60.0
 # parameter: mean_construction_time = 45.0
@@ -14,7 +14,6 @@ time, event_id, event_type, length_event_list, length_queue, in_service, machine
 117.235, 8, Arrival, 2, 0, 1, 0
 135.000, 10, Departure, 2, 1, 1, 0
 150.000, 2, Breakdown, 2, 0, 1, 0
-180.000, 13, Departure, 2, 0, 1, 1
 182.987, 11, Arrival, 1, 0, 1, 1
 228.329, 14, RepairCompletion, 1, 1, 1, 1
 352.230, 15, Arrival, 1, 1, 1, 0

@@ -1,8 +1,8 @@
 include("factory_simulation.jl")
 
-# initialising params 
+# initialising parameters
 seed = 1 
-T = 1000.0
+T = 1000.0 
 mean_interarrival = 60 # unit is minutes
 mean_construction_time = 45 #mins
 mean_breakdown = 2880 #2 days in minute
@@ -36,5 +36,5 @@ println(fid_state,"time, event_id, event_type, length_event_list, length_queue, 
 run!(system, R, T, fid_state, fid_entities) # run the simulation
 
 # close the files 
-close(fid_entities)
+close(fid_entities) 
 close(fid_state)
