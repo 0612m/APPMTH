@@ -301,10 +301,6 @@ function run!(system::SystemState, R::RandomNGs, T::Float64, fid_state::IO, fid_
         
                 # Write the updated state to the state file after processing the event
                 write_state(fid_state, state, event)
-                
-                if departure !== nothing 
-                    write_entity(fid_entities, system, lawnmower, departure)
-                end
             end
             
             return system  # Return the final state of the system
